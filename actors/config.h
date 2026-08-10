@@ -29,6 +29,7 @@ public:
     std::string host = "localhost";
     bool server_mode = false;
     std::string betas = "0.1,0.5,1.0,2.0,4.0"; // comma-separated beta values to sweep
+    int workers = 3; // number of parallel worker actors the server spawns
     config()
     {
         // Add the port and host to the config
@@ -36,7 +37,8 @@ public:
             .add(port, "port,p", "set port")
             .add(host, "host,H", "set host (ignored in server mode)")
             .add(server_mode, "server-mode,s", "enable server mode")
-            .add(betas, "betas,b", "comma-separated list of beta values to sweep");
+            .add(betas, "betas,b", "comma-separated list of beta values to sweep")
+            .add(workers, "workers,w", "number of parallel worker actors to spawn (server mode)");
     }
 };
 

@@ -135,9 +135,10 @@ struct server_state {
     int jobs_completed = 0;
 };
 
-behavior server(stateful_actor<server_state>* self, uint16_t port, std::vector<double> betas) {
+behavior server(stateful_actor<server_state>* self, uint16_t port, std::vector<double> betas, int num_workers) {
     // Start the timer
     self->state().start_time = std::chrono::high_resolution_clock::now();
+    self->state().actor_number = num_workers;
     auto is_port = self->system().middleman().publish(self, port);
     if (!is_port) {
         self->println("Failed to publish actor on port " + to_string(port));
@@ -233,7 +234,7 @@ void caf_main(actor_system& system, const config& cfg) {
 
     if (cfg.server_mode)
     {
-        auto server_actor = system.spawn(server, cfg.port, parse_betas(cfg.betas));
+        auto server_actor = system.spawn(server, cfg.port, parse_betas(cfg.betas), cfg.workers);
     }
     else
     {
