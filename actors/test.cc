@@ -21,7 +21,7 @@ struct worker_state {
     actor manager_actor;
 };
 
-behavior worker_actor(stateful_actor<worker_state>* self, actor manager) {
+behavior worker_actor(stateful_actor<worker_state>* self, actor manager, int num_gpus) {
     self->println("Worker actor is spawned successfully!");
     self->state().manager_actor = manager;
 
@@ -35,7 +35,13 @@ behavior worker_actor(stateful_actor<worker_state>* self, actor manager) {
             actor self_hdl{self};       // owning handle so the actor survives until the thread reports back
             actor mgr = self->state().manager_actor;
 
-            std::thread([self_hdl, mgr, job]() mutable {
+            // Shared across every worker_actor in this process: each job that gets
+            // dispatched claims the next GPU index, round-robin, so concurrent training
+            // runs spread across all local GPUs instead of piling onto GPU 0.
+            static std::atomic<int> next_gpu{0};
+            int gpu_id = num_gpus > 0 ? (next_gpu.fetch_add(1) % num_gpus) : -1;
+
+            std::thread([self_hdl, mgr, job, gpu_id]() mutable {
                 double result = 0.0;
 
                 // --quiet: latentflow.py sends its training logs to stderr and prints
@@ -44,6 +50,12 @@ behavior worker_actor(stateful_actor<worker_state>* self, actor manager) {
                 // whichever python3 happens to be first on PATH (that's how the
                 // torch/torchvision/etc. dependencies actually get found).
                 std::ostringstream command;
+                if (gpu_id >= 0) {
+                    // latentflow.py just does `"cuda" if torch.cuda.is_available()`, so it
+                    // always grabs whatever CUDA sees as device 0. Restricting visibility to
+                    // one physical GPU per process is what actually pins this run to it.
+                    command << "CUDA_VISIBLE_DEVICES=" << gpu_id << " ";
+                }
                 command << "mpirun -n 1 ../.venv/bin/python3 ./latentflow.py --beta " << job.beta << " --quiet";
 
                 FILE* pipe = popen(command.str().c_str(), "r");
@@ -87,7 +99,7 @@ struct remote_state
     caf::actor manager;
 };
 
-caf::behavior remote(caf::stateful_actor<remote_state> *self, std::string hostname, uint16_t port)
+caf::behavior remote(caf::stateful_actor<remote_state> *self, std::string hostname, uint16_t port, int num_gpus)
 {
 
     // The below code connects this actor to a published actor on a remote host
@@ -116,7 +128,7 @@ caf::behavior remote(caf::stateful_actor<remote_state> *self, std::string hostna
                 // Not detached: the handler below never blocks (it hands the
                 // python call off to its own std::thread), so these can share
                 // CAF's normal scheduler pool.
-                actor worker = self->spawn(worker_actor, self->state().manager);
+                actor worker = self->spawn(worker_actor, self->state().manager, num_gpus);
                 self->println("Spawning worker actor on {} on remote", i);
                 anon_mail(worker).send(self->state().manager);
             }
@@ -135,7 +147,7 @@ struct server_state {
     int jobs_completed = 0;
 };
 
-behavior server(stateful_actor<server_state>* self, uint16_t port, std::vector<double> betas, int num_workers) {
+behavior server(stateful_actor<server_state>* self, uint16_t port, std::vector<double> betas, int num_workers, int num_gpus) {
     // Start the timer
     self->state().start_time = std::chrono::high_resolution_clock::now();
     self->state().actor_number = num_workers;
@@ -160,7 +172,7 @@ behavior server(stateful_actor<server_state>* self, uint16_t port, std::vector<d
             self->println("Spawning worker actor {} on server", i);
             // Not detached: the handler never blocks (the python call runs on
             // its own std::thread), so workers can share CAF's scheduler pool.
-            actor worker = self->spawn(worker_actor, self);
+            actor worker = self->spawn(worker_actor, self, num_gpus);
             if (!self->state().jobs.empty())
             {
                 auto job = self->state().jobs.front();
@@ -234,11 +246,11 @@ void caf_main(actor_system& system, const config& cfg) {
 
     if (cfg.server_mode)
     {
-        auto server_actor = system.spawn(server, cfg.port, parse_betas(cfg.betas), cfg.workers);
+        auto server_actor = system.spawn(server, cfg.port, parse_betas(cfg.betas), cfg.workers, cfg.gpus);
     }
     else
     {
-        auto remote_actor = system.spawn(remote, cfg.host, cfg.port);
+        auto remote_actor = system.spawn(remote, cfg.host, cfg.port, cfg.gpus);
     }
 }
 CAF_MAIN(io::middleman, caf::id_block::my_project)

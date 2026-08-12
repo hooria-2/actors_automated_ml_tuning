@@ -16,6 +16,7 @@
 #include <iostream> // For std::stod
 #include <random>
 #include <thread>
+#include <atomic>
 
 
 // using the necessary namespaces
@@ -30,6 +31,7 @@ public:
     bool server_mode = false;
     std::string betas = "0.1,0.5,1.0,2.0,4.0"; // comma-separated beta values to sweep
     int workers = 3; // number of parallel worker actors the server spawns
+    int gpus = 2; // number of local GPUs to round-robin worker training runs across (0 disables pinning)
     config()
     {
         // Add the port and host to the config
@@ -38,7 +40,8 @@ public:
             .add(host, "host,H", "set host (ignored in server mode)")
             .add(server_mode, "server-mode,s", "enable server mode")
             .add(betas, "betas,b", "comma-separated list of beta values to sweep")
-            .add(workers, "workers,w", "number of parallel worker actors to spawn (server mode)");
+            .add(workers, "workers,w", "number of parallel worker actors to spawn (server mode)")
+            .add(gpus, "gpus,g", "number of local GPUs to round-robin worker training runs across (0 disables pinning)");
     }
 };
 
