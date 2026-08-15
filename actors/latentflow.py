@@ -113,7 +113,9 @@ def elbo_loss(x_hat, x, mu, log_var, beta: float):
 
 def train(model, loader, optimizer, epoch, beta: float):
     model.train()
-    total, recon_t, kl_t = 0.0, 0.0, 0.0
+    total = torch.zeros((), device=DEVICE)
+    recon_t = torch.zeros((), device=DEVICE)
+    kl_t = torch.zeros((), device=DEVICE)
 
     for batch_idx, (x, _) in enumerate(loader):
         x = x.to(DEVICE)
@@ -122,11 +124,13 @@ def train(model, loader, optimizer, epoch, beta: float):
         loss, recon, kl    = elbo_loss(x_hat, x, mu, log_var, beta)
         loss.backward()
         optimizer.step()
-        total   += loss.item()
-        recon_t += recon.item()
-        kl_t    += kl.item()
+        total   += loss.detach()
+        recon_t += recon.detach()
+        kl_t    += kl.detach()
 
     n = len(loader)
+    total, recon_t, kl_t = total.item()/n, recon_t.item()/n, kl_t.item()/n
+
     print(
         f"Epoch {epoch:02d} | "
         f"ELBO {total/n:.2e}  "
@@ -174,25 +178,29 @@ def batch_psnr(x_hat: torch.Tensor, x: torch.Tensor) -> float:
 @torch.no_grad()
 def evaluate(model, loader, epoch, beta: float):
     model.eval()
-    total_elbo = total_recon = total_kl = total_ssim = total_psnr = 0.0
+    total_elbo = torch.zeros((), device=DEVICE)
+    total_recon = torch.zeros((), device=DEVICE)
+    total_kl = torch.zeros((), device=DEVICE)
+    total_ssim = 0.0
+    total_psnr = 0.0
     n = len(loader)
 
     for x, _ in loader:
-        x                  = x.to(DEVICE)
+        x                  = x.to(DEVICE, non_blockig=True)
         x_hat, mu, log_var = model(x)
         loss, recon, kl    = elbo_loss(x_hat, x, mu, log_var, beta)
 
-        total_elbo  += loss.item()
-        total_recon += recon.item()
-        total_kl    += kl.item()
+        total_elbo  += loss
+        total_recon += recon
+        total_kl    += kl
         total_ssim  += batch_ssim(x_hat, x)
         total_psnr  += batch_psnr(x_hat, x)
 
     print(
         f"          Val | "
-        f"ELBO {total_elbo/n:.2e}  "
-        f"Recon {total_recon/n:.2e}  "
-        f"KL {total_kl/n:.2e}  "
+        f"ELBO {total_elbo.item()/n:.2e}  "
+        f"Recon {total_recon.item()/n:.2e}  "
+        f"KL {total_kl.item()/n:.2e}  "
         f"SSIM {total_ssim/n:.2f}  "
         f"PSNR {total_psnr/n:.2f} dB"
     )
@@ -419,9 +427,9 @@ def trainFM(model_FM, Latent_model, train_loader, tag: str):
     optimizer_FM = torch.optim.Adam(model_FM.parameters(), lr=LR_FM)
     losses = []
     for epoch in range(EPOCHS_FM):
-        loss_ = 0
+        loss_ = torch.zeros((), device=DEVICE)
         for batch_idx, (X1, _) in enumerate(train_loader):
-            X1 = X1.to(DEVICE)
+            X1 = X1.to(DEVICE, non_blocking=True)
             with torch.no_grad():
                 x1 = Latent_model.encode(X1)
 
@@ -433,9 +441,9 @@ def trainFM(model_FM, Latent_model, train_loader, tag: str):
 
             if batch_idx % 500 == 0:
                 print(f"epoch {epoch} | loss {loss_FM.item():.4f}")
-            loss_ += loss_FM.item()
+            loss_ += loss_FM.detach()
 
-        losses.append(loss_)
+        losses.append(loss_.item())
 
     fm_save_path = f"fm_mnist_{tag}.pth"
     torch.save(model_FM, fm_save_path)
