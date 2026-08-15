@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 
 LATENT_DIM  = 64#16     # elbow for recon  # size of the latent vector
-BATCH_SIZE  = 256    # VAEs are more sensitive to batch size than standard autoencoders because:
+BATCH_SIZE  = 512#256    # VAEs are more sensitive to batch size than standard autoencoders because:
                      # KL term is averaged over batch
                      # posterior statistics depend on batch distribution
                      # So: Bigger batch ≠ always better latent space
