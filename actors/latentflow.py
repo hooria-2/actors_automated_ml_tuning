@@ -118,7 +118,7 @@ def train(model, loader, optimizer, epoch, beta: float):
     kl_t = torch.zeros((), device=DEVICE)
 
     for batch_idx, (x, _) in enumerate(loader):
-        x = x.to(DEVICE)
+        x = x.to(DEVICE, non_blocking=True)
         optimizer.zero_grad()
         x_hat, mu, log_var = model(x)
         loss, recon, kl    = elbo_loss(x_hat, x, mu, log_var, beta)
@@ -133,11 +133,11 @@ def train(model, loader, optimizer, epoch, beta: float):
 
     print(
         f"Epoch {epoch:02d} | "
-        f"ELBO {total/n:.2e}  "
-        f"Recon {recon_t/n:.2e}  "
-        f"KL {kl_t/n:.2e}"
+        f"ELBO {total:.2e}  "
+        f"Recon {recon_t:.2e}  "
+        f"KL {kl_t:.2e}"
     )
-    return total/n, recon_t/n, kl_t/n
+    return total, recon_t, kl_t
 
 def batch_ssim(x_hat: torch.Tensor, x: torch.Tensor) -> float:
     kernel_size = 11
@@ -186,7 +186,7 @@ def evaluate(model, loader, epoch, beta: float):
     n = len(loader)
 
     for x, _ in loader:
-        x                  = x.to(DEVICE, non_blockig=True)
+        x                  = x.to(DEVICE, non_blocking=True)
         x_hat, mu, log_var = model(x)
         loss, recon, kl    = elbo_loss(x_hat, x, mu, log_var, beta)
 
@@ -205,7 +205,7 @@ def evaluate(model, loader, epoch, beta: float):
         f"PSNR {total_psnr/n:.2f} dB"
     )
 
-    return total_elbo/n, total_recon/n, total_kl/n, total_ssim/n, total_psnr/n
+    return total_elbo.item()/n, total_recon.item()/n, total_kl.item()/n, total_ssim/n, total_psnr/n
 
 @torch.no_grad()
 def encode_test_set(model, test_loader):

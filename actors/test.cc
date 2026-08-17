@@ -29,7 +29,7 @@ behavior worker_actor(stateful_actor<worker_state>* self, actor manager, int num
         [=](job_t job) {
             // popen()/pclose() block until the python training run finishes, which can
             // take minutes. Running that inline here would block this actor's mailbox
-            // (and, if this actor isn't detached, a shared CAF scheduler thread too).
+            // (and, if this actor isn't detached, a shared CAF scheduler thread too).  
             // Instead, hand the blocking call off to its own std::thread and return
             // immediately, so the worker actor stays fully responsive while it works.
             actor self_hdl{self};       // owning handle so the actor survives until the thread reports back
