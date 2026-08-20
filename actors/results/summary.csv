@@ -1,0 +1,1 @@
+run_id,timestamp,workers,gpus,num_betas,reported_seconds,wall_seconds,gpu_util_avg_pct,gpu_util_max_pct,gpu_mem_avg_mib

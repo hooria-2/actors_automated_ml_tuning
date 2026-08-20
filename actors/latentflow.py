@@ -16,13 +16,13 @@ BATCH_SIZE  = 512#256    # VAEs are more sensitive to batch size than standard a
                      # KL term is averaged over batch
                      # posterior statistics depend on batch distribution
                      # So: Bigger batch ≠ always better latent space
-EPOCHS      = 200
+EPOCHS      = 20
 LR          = 1e-3
 BETA        = 1.0#0.10      # default weight on KL term (β-VAE); each actor overrides this
 DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
 
 LR_FM       = 1e-5
-EPOCHS_FM   = 200
+EPOCHS_FM   = 20
 
 
 class Encoder(nn.Module):
